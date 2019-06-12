@@ -143,6 +143,18 @@ for (i in 1:418) {
 test$Survived = sur
 write.csv(test[c("PassengerId","Survived")],file = "submmision.csv",row.names = FALSE)
 ```
+
+```{r}
+prop.table(table(train$Survived, train$Sex), 2)
+test$Survived[test$Sex == "female"] = 1
+test$Survived[test$Sex == "male"] = 0
+
+write.csv(test[c("PassengerId","Survived")],file = "baseline.csv",row.names = FALSE)
+```
+
+a baseline classifier can achieve 0.76555 accuracy, by setting all women 1 and men 0.
+![](baseline.png)
+
 Adding a title feature gives a 0.78468 accuracy. Notice that this is already a very good accuracy. This paper is worth taking a look: [The Ladder: A Reliable Leaderboard for Machine Learning Competitions](https://arxiv.org/abs/1502.04585)
 You should also not make the assumption that a model with higher test accuracy is necessarily “better”; if you make many submissions, you are in some sense “overfitting to the test dataset.”
 ![](logistic.png)
