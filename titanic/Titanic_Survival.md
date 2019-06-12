@@ -10,16 +10,11 @@ output:
 ###TODO
 ###continue
 
-```{r setup, include = FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-library(ggplot2)
-library(PRROC)
-library(glmnet)
-library(doParallel)
-```
+
 
 ###Problem 1
-```{r}
+
+```r
 test = read.csv("test.csv")
 train = read.csv("train.csv")
 train.label = train$Survived
@@ -28,10 +23,38 @@ all = rbind(train.feature, test)
 # all$Pclass = as.factor(all$Pclass)
 summary(all)
 ```
+
+```
+##   PassengerId       Pclass                                    Name     
+##  Min.   :   1   Min.   :1.000   Connolly, Miss. Kate            :   2  
+##  1st Qu.: 328   1st Qu.:2.000   Kelly, Mr. James                :   2  
+##  Median : 655   Median :3.000   Abbing, Mr. Anthony             :   1  
+##  Mean   : 655   Mean   :2.295   Abbott, Mr. Rossmore Edward     :   1  
+##  3rd Qu.: 982   3rd Qu.:3.000   Abbott, Mrs. Stanton (Rosa Hunt):   1  
+##  Max.   :1309   Max.   :3.000   Abelson, Mr. Samuel             :   1  
+##                                 (Other)                         :1301  
+##      Sex           Age            SibSp            Parch      
+##  female:466   Min.   : 0.17   Min.   :0.0000   Min.   :0.000  
+##  male  :843   1st Qu.:21.00   1st Qu.:0.0000   1st Qu.:0.000  
+##               Median :28.00   Median :0.0000   Median :0.000  
+##               Mean   :29.88   Mean   :0.4989   Mean   :0.385  
+##               3rd Qu.:39.00   3rd Qu.:1.0000   3rd Qu.:0.000  
+##               Max.   :80.00   Max.   :8.0000   Max.   :9.000  
+##               NA's   :263                                     
+##       Ticket          Fare                     Cabin      Embarked
+##  CA. 2343:  11   Min.   :  0.000                  :1014    :  2   
+##  1601    :   8   1st Qu.:  7.896   C23 C25 C27    :   6   C:270   
+##  CA 2144 :   8   Median : 14.454   B57 B59 B63 B66:   5   Q:123   
+##  3101295 :   7   Mean   : 33.295   G6             :   5   S:914   
+##  347077  :   7   3rd Qu.: 31.275   B96 B98        :   4           
+##  347082  :   7   Max.   :512.329   C22 C26        :   4           
+##  (Other) :1261   NA's   :1         (Other)        : 271
+```
 From summary we notice that Age has the most missing values, and this is a big deal. Therefore we have to fill in these missing values. Usually we will replace them with the average. In this problem, it can be noticed that people have different age group, and replace the missing value based on different age group might be a good idea. For example, people with the "Miss." title are ususally young, so we replace missing values of these people with the average age of all "Miss".
 
 feature engineering
-```{r}
+
+```r
 #average age for "Miss."
 age1 = mean(all[grep("Miss",all$Name),]$Age,na.rm = TRUE)
 #average age for "Mrs."
@@ -49,6 +72,14 @@ all$Age[grep("Dr",all$Name)] = age4
 all$Age[grep("Ms",all$Name)]= age1
 
 summary(all$Age)
+```
+
+```
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##   5.483  33.322  33.322  29.931  33.322  70.000
+```
+
+```r
 all$Title = "Other"
 all$Title[grep("Miss",all$Name)]="Miss"
 all$Title[grep("Mrs",all$Name)]="Mrs"
@@ -57,14 +88,16 @@ all$Title[grep("Mr",all$Name)]= "Mr"
 ```
 No missing values now for Age  
 Since there's only one missing value for Fare, we replace it by its average.
-```{r}
+
+```r
 #fill missing values of Fare with average
 all$Fare[which(is.na(all$Fare))] = mean(all$Fare, na.rm = TRUE)
 ```
 
 Without missing values, we can now build our model. Before that, it's a good idea to have a validation dataset
 
-```{r}
+
+```r
 #train has 891 rows
 #test has 418 rows
 set.seed(1)
@@ -88,7 +121,8 @@ train.feature = model.matrix( ~ .-1, train.feature)
 Here comes a hard part, variable selection.  
 You can use LASSO with CV to select  
 First of all, we estimates a LASSO model with Alpha = 1. The function cv.glmnet() is used to search for a regularization parameter, namely Lambda, that controls the penalty strength.
-```{r}
+
+```r
 #https://www.r-bloggers.com/variable-selection-with-elastic-net/
 
 # registerDoParallel(cores = 4)
@@ -100,14 +134,19 @@ First of all, we estimates a LASSO model with Alpha = 1. The function cv.glmnet(
 
 I didn't do it, because you can use your brain(domain knowledge) to select in this problem. For example, clearly Name is not an important feature as it is almost unique to everyone. What we want are general enough features.
 
-```{r}
+
+```r
 formula = formula("Survived ~ Title + Pclass + Sex + Age + Fare + SibSp + Parch")
 x = model.matrix(formula, train)
 
 cvfit = cv.glmnet(x, train.label, family = "binomial",
                    type.measure = "class")
 plot(cvfit)
+```
 
+![](Titanic_Survival_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
+
+```r
 val.feature = model.matrix(formula, val)
 
 y_hat_logistic = as.numeric(predict(cvfit,val.feature , s = "lambda.min", type = "response"))
@@ -119,11 +158,19 @@ bg1 <- y_hat_logistic[val.label == 0]
 roc1 = roc.curve(fg1, bg1, curve = T)
 pr1 = pr.curve(fg1, bg1, curve = T)
 plot(roc1)
+```
+
+![](Titanic_Survival_files/figure-html/unnamed-chunk-6-2.png)<!-- -->
+
+```r
 plot(pr1)
 ```
+
+![](Titanic_Survival_files/figure-html/unnamed-chunk-6-3.png)<!-- -->
 Now it's time to pick a cutoff value, 0.5 seems a good one.
 
-```{r}
+
+```r
 test.feature = model.matrix(formula, test)
 
 y_hat_logistic = as.numeric(predict(cvfit, test.feature , s = "lambda.min", type = "response"))
