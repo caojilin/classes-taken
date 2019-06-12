@@ -7,12 +7,11 @@ output:
       keep_md: true
 ---
 
-###TODO
-###continue
+### TODO maybe finish Boosting and Random Forests models on this dataset?
 
 
 
-###Problem 1
+### Problem 1
 
 ```r
 test = read.csv("test.csv")
@@ -50,9 +49,11 @@ summary(all)
 ##  347082  :   7   Max.   :512.329   C22 C26        :   4           
 ##  (Other) :1261   NA's   :1         (Other)        : 271
 ```
+
 From summary we notice that Age has the most missing values, and this is a big deal. Therefore we have to fill in these missing values. Usually we will replace them with the average. In this problem, it can be noticed that people have different age group, and replace the missing value based on different age group might be a good idea. For example, people with the "Miss." title are ususally young, so we replace missing values of these people with the average age of all "Miss".
 
-feature engineering
+**feature engineering**
+
 
 ```r
 #average age for "Miss."
@@ -86,8 +87,10 @@ all$Title[grep("Mrs",all$Name)]="Mrs"
 all$Title[grep("Master",all$Name)]="Master"
 all$Title[grep("Mr",all$Name)]= "Mr"
 ```
+
 No missing values now for Age  
 Since there's only one missing value for Fare, we replace it by its average.
+
 
 ```r
 #fill missing values of Fare with average
@@ -118,9 +121,11 @@ train.feature = train[, -grep("Survived", colnames(train))]
 train.label = train$Survived
 train.feature = model.matrix( ~ .-1, train.feature)
 ```
+
 Here comes a hard part, variable selection.  
 You can use LASSO with CV to select  
 First of all, we estimates a LASSO model with Alpha = 1. The function cv.glmnet() is used to search for a regularization parameter, namely Lambda, that controls the penalty strength.
+
 
 ```r
 #https://www.r-bloggers.com/variable-selection-with-elastic-net/
@@ -150,7 +155,6 @@ plot(cvfit)
 val.feature = model.matrix(formula, val)
 
 y_hat_logistic = as.numeric(predict(cvfit,val.feature , s = "lambda.min", type = "response"))
-
 
 fg1 <- y_hat_logistic[val.label == 1]
 bg1 <- y_hat_logistic[val.label == 0]
@@ -186,5 +190,10 @@ for (i in 1:418) {
 test$Survived = sur
 write.csv(test[c("PassengerId","Survived")],file = "submmision.csv",row.names = FALSE)
 ```
-Adding a title feature gives a 0.79425 accuracy
+Adding a title feature gives a 0.78468 accuracy. Notice that this is already a very good accuracy. This paper is worth taking a look: [The Ladder: A Reliable Leaderboard for Machine Learning Competitions](https://arxiv.org/abs/1502.04585)
+You should also not make the assumption that a model with higher test accuracy is necessarily “better”; if you make many submissions, you are in some sense “overfitting to the test dataset.”
 ![](logistic.png)
+
+What's more we can do? Of course we can try other models, such as SVM, LDA/QDA, KNN. However, it will not make a big difference. Why? I think it is because the size of this dataset is too small. It's really hard to learn the pattern, even though we use more complicated model, as we will prabably overfit the data. 
+The only models I would like to try are models that have low variance such as Random Forests, bagging, and boosting maybe.
+[boosting has low variance](https://www.quora.com/What-effect-does-boosting-have-on-bias-and-variance)
