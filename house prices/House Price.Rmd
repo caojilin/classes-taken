@@ -1,18 +1,26 @@
+---
+title: "Titanic Survival"
+author: "caojilin"
+date: "10/24/2018"
+output:
+  html_document:
+      keep_md: true
+---
+
+```{r}
 # get the require R packages
 library(ggplot2)
 library(plyr)
 library(dplyr)
 library(caret)
-library(moments)
 library(glmnet)
-# library(elasticnet)
 library(knitr)
+library(moments)
+```
 
-
+```{r}
 train = read.csv("kaggle_house_pred_train.csv")
 test = read.csv("kaggle_house_pred_test.csv")
-
-
 
 # combine train and test data for preprocessing
 all_data <- rbind(select(train,MSSubClass:SaleCondition),
@@ -25,8 +33,9 @@ df <- rbind(data.frame(version="log(price+1)",x=log(train$SalePrice + 1)),
 # plot histogram
 ggplot(data=df) +
   facet_wrap(~version,ncol=2,scales="free_x") +
-  geom_histogram(aes(x=x))
-
+  geom_histogram(aes(x=x), bins=30)
+```
+```{r}
 # transform SalePrice target to log form
 train$SalePrice <- log(train$SalePrice + 1)
 
@@ -71,9 +80,9 @@ all_data <- cbind(all_data[numeric_feats],categorical_1_hot)
 X_train <- all_data[1:nrow(train),]
 X_test <- all_data[(nrow(train)+1):nrow(all_data),]
 y <- train$SalePrice
+```
 
-
-
+```{r}
 # set up caret model training parameters
 # model specific training parameter
 CARET.TRAIN.CTRL <- trainControl(method="repeatedcv",
@@ -100,7 +109,9 @@ ggplot(data=filter(model_ridge$result,RMSE<0.14)) +
   geom_line(aes(x=lambda,y=RMSE))
 
 mean(model_ridge$resample$RMSE)
+```
 
+```{r}
 # test out Lasso regression model
 
 # train model
@@ -120,6 +131,9 @@ model_lasso
 
 mean(model_lasso$resample$RMSE)
 
+```
+
+```{r}
 # extract coefficients for the best performing model
 coef <- data.frame(coef.name = dimnames(coef(model_lasso$finalModel,s=model_lasso$bestTune$lambda))[[1]], 
                    coef.value = matrix(coef(model_lasso$finalModel,s=model_lasso$bestTune$lambda)))
@@ -148,10 +162,15 @@ ggplot(imp_coef) +
   coord_flip() +
   ggtitle("Coefficents in the Lasso Model") +
   theme(axis.title=element_blank())
+```
 
+```{r}
 # make create submission file
 preds <- exp(predict(model_lasso,newdata=X_test)) - 1
 
 # construct data frame for solution
 solution <- data.frame(Id=as.integer(rownames(X_test)),SalePrice=preds)
-write.csv(solution,"ridge_sol.csv",row.names=FALSE)
+write.csv(solution,"lasso_sol.csv",row.names=FALSE)
+
+```
+
