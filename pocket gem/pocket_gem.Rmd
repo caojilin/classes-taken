@@ -1,0 +1,158 @@
+---
+title: "pocket_gem"
+author: "caojilin"
+date: "4/8/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+```{r, echo=F}
+# import data
+iaps = read.csv("iaps.csv")
+# sessions = read.csv("sessions.csv")
+users = read.csv("users.csv")
+spendevents = read.csv("spendevents.csv")
+id = users$udid
+```
+
+First we define **true non-payer**, **non-payer**, **payer**   
+**payer**: players who pays the game and generate real revenues  
+**true non-payer**: players who installed the game but never pays    
+**non-payer**: players who insalled the game and probably will pay after few weeks    
+
+We are interested in **non-payers**, we suspect they are likely to convert when we give promotion and bring more revenue. After query the `install_date` we found that it ranges from 2016-03-01 to 2016-03-07. And the spending dates range from 2016-03-01 to 2016-04-29. Therefore this data analysis probably would not be suitable in 2019.
+
+
+### EDA
+```{r, echo=F, include=F}
+#inspect a single player's spending history first
+spendevents[spendevents$udid == "d99969a86fda43cda815e5870d76aed2",]
+```
+
+```{r, echo=F,include=F}
+#the number of unique users:
+length(unique(users$udid))
+#the number of players who pay
+payer.id = spendevents$udid[spendevents$spendtype == "IAP" | spendevents$spendtype == "valuepack"]
+
+#unique payers
+length(unique(payer.id))
+
+#user played the game but not generate revenue
+non_payer.id = spendevents$udid[spendevents$spendtype != "IAP" & spendevents$spendtype != "valuepack"]
+#unique non-payers, they played the game and had activities in the game but did not spend
+length(unique(non_payer.id))
+
+#among players who had activities in the game, only 6% of them spent money
+1194/(1194+18017)
+
+#15% users installed the game but did not have any activities such as earning gems. This might mean they installed the game but did not play at all.
+(22576-(1194+18017))/22576
+```
+
+```{r, echo=F,include=F}
+# we merge two tables that we are interested in 
+all = merge(spendevents, users, by = "udid")
+
+# select all rows which are payers
+all.paied = all[all$udid %in% payer.id,]
+# select rows with 'IAP' and 'valuepack' entries
+all.paied = all.paied[all.paied$spendtype == 'IAP' | all.paied$spendtype == 'valuepack',]
+# unique payers tables
+all.paied = subset(all.paied,!duplicated(all.paied$udid))
+# all users table
+all = subset(all,!duplicated(all$udid))
+all$payer = all$spendtype == 'IAP' | all$spendtype == 'valuepack'
+```
+
+```{r, echo=F}
+country = sort(table(all$country), decreasing = T)
+country.names = names(country)
+# Stacked
+ggplot(all[all$country %in% country.names[1:10],], aes(fill=payer,x=reorder(country,country,
+                     function(x)-length(x)))) + 
+    geom_bar(stat = 'count')+
+  labs(x = "countries")+
+  ggtitle("Top 10 countries payer vs non-payer")
+#country[1]/sum(country)
+```
+
+52.4% users are from U.S.
+
+```{r, echo=F}
+platform = sort(table(all$hw_ver), decreasing = T)
+#U.S. is the main targe country, 70% payers come from U.S.
+ggplot(all[all$hw_ver %in% names(platform)[1:10],], aes(fill=payer,x=reorder(hw_ver,hw_ver,
+                     function(x)-length(x)))) + 
+    geom_bar(stat = 'count') +
+  labs(x = "platform")+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  ggtitle("Top 10 platform payer vs non-payer")
+
+platform = sort(table(all$hw_ver[all$payer==T]), decreasing = T)
+platform[1:3]/sum(platform)
+```
+44% of payers use iPhone7 or iPhone8 
+
+```{r, echo=F}
+#the time (days) between installing the game and made the first purchase.
+days = as.integer( difftime(all.paied$date, all.paied$install_date,units = c("days")))
+days[days == 0] = 1
+all.paied$days = days
+
+ggplot(all.paied[all.paied$days <=20,], aes(x=reorder(days,days,
+                     function(x)-length(x)))) + 
+    geom_bar(stat = 'count', fill="brown1") +
+  labs(x = "days between installing the game and made the first purchase")+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+table(days)[1]/sum(table(days))
+```
+
+Among all payers 50 % of them made their first purchase on the first day 
+
+### model
+
+In order to distinguish payer from non-payer, we try to fit a binary classifier. I use logistic regression because of its interoperability (logistic regression returns probabilities)  
+After EDA we have found some important predictors, so we are going to do some feature engeerings to use them.  
+```{r, echo=F}
+all$days = all.paied$days[match(all$udid, all.paied$udid)]
+all$days[is.na(all$days)] = 0
+all = na.omit(all)
+all$currency = NULL
+```
+
+split the dataset into train dataset and test dataset
+```{r}
+set.seed(123)
+train_ind <- sample(seq_len(nrow(all)), size = 16000)
+train <- all[train_ind, ]
+test <- all[-train_ind, ]
+```
+
+we fit `story` `spendtype` `lang` `country` `hw_ver` `days` against `payer`. Hopefully we can distinguish the payer and non-payer.
+```{r, eval=T,warning=F}
+start.time <- Sys.time()
+logistic_model = glm(payer ~story+spendtype+
+                       lang+country+hw_ver+days,family = 'binomial', data=train)
+end.time <- Sys.time()
+paste0("Training takes ",round((end.time - start.time)*60,2), "s")
+```
+
+```{r, eval=T,echo=F}
+logistic_model$xlevels[["story"]] <- union(logistic_model$xlevels[["story"]], levels(test$story))
+logistic_model$xlevels[["lang"]] <- union(logistic_model$xlevels[["lang"]], levels(test$lang))
+logistic_model$xlevels[["country"]] <- union(logistic_model$xlevels[["country"]], levels(test$country))
+```
+Prediction
+```{r, eval=T,warning=F}
+probs <- predict(logistic_model,test, type = 'response')
+probs <- probs > 0.5
+mean(probs == test$payer)
+```
+
+We got 98% accuracy on test dataset, which means by using our features we can predict very well. Now we trained a classifier which we can use to predict whether a user would become a payer or not (convert).   
+Using this model, we can use it to decide the target group. We just need to put the user info into this model to see how likely this user will convert.  
+Remark: to furthur evaluate our model's perfomance, we need more data or we can use A/B testing to test our model's performance.
