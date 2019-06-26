@@ -1,2 +1,1 @@
-# classes-taken
-all selected classes taken at Berkeley
+# machine learning projects

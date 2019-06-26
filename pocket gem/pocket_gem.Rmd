@@ -14,7 +14,7 @@ library(glmnet)
 library(PRROC)
 library(randomForest)
 library(e1071)
-
+library(DMwR)
 ```
 
 ```{r, echo=F}
@@ -154,7 +154,10 @@ all$currency = NULL
 split the dataset into train dataset and test dataset
 ```{r}
 # set.seed(123)
+all$payer[all$payer == FALSE] = 0
+all$payer[all$payer == TRUE] = 1
 all$payer = factor(all$payer)
+
 train_ind <- sample(seq_len(nrow(all)), size = nrow(all)*0.8)
 train <- all[train_ind, ]
 test <- all[-train_ind, ]
@@ -163,6 +166,18 @@ table(train$payer)
 table(test$payer)
 ```
 Very few payers. This is an unbalanced situation.
+
+```{r}
+newData <- SMOTE(payer ~ story + spendtype + lang + country + hw_ver + days, all, perc.over = 600, perc.under = 100)
+table(newData$payer)
+
+train_ind <- sample(seq_len(nrow(newData)), size = nrow(newData)*0.8)
+train <- newData[train_ind, ]
+test <- newData[-train_ind, ]
+table(newData$payer)
+table(train$payer)
+table(test$payer)
+```
 
 we fit `story` `spendtype` `lang` `country` `hw_ver` `days` against `payer`. Hopefully we can distinguish the payer and non-payer.
 ```{r, eval=T,warning=F}
@@ -190,9 +205,8 @@ we fit `story` `spendtype` `lang` `country` `hw_ver` `days` against `payer`. Hop
 ```{r}
 fit_svm <- svm(payer ~ story + spendtype + lang + country + 
                                    hw_ver + days, data = train)
-y_hat = predict(fit_svm, test )
+y_hat = predict(fit_svm, test)
 mean(y_hat == test$payer)
-
 ```
 
 ```{r}
@@ -203,9 +217,22 @@ fit_randomForest = randomForest(payer ~ story + spendtype + lang + country +
 
 y_hat = predict(fit_randomForest, test, type = "response")
 mean(y_hat == test$payer)
+
+# library(pROC)
+# y_hat[y_hat == FALSE] = 0
+# y_hat[y_hat == TRUE] = 1
+# 
+# test$payer[test$payer == FALSE] = 0
+# test$payer[test$payer == TRUE] = 1
+# 
+# roc_obj <- roc(test$payer, as.integer(y_hat))
+# auc(roc_obj)
 ```
 A separable case. 
 
 ~~We got 98% accuracy on test dataset, which means by using our features we can predict very well. Now we trained a classifier which we can use to predict whether a user would become a payer or not (convert).   
 Using this model, we can use it to decide the target group. We just need to put the user info into this model to see how likely this user will convert.  
 Remark: to furthur evaluate our model's perfomance, we need more data or we can use A/B testing to test our model's performance.~~
+
+
+
